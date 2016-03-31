@@ -505,7 +505,8 @@ int DefaultCompletionFunc( const char *partial, char commands[ COMMAND_COMPLETIO
 //	m_bIsNewConCommand = true;
 //}
 
-ConCommand::ConCommand( const char *pName, FnCommandCallbackVoid_t callback, const char *pHelpString /*= 0*/, int flags /*= 0*/, FnCommandCompletionCallback completionFunc /*= 0*/ )
+ConCommand::ConCommand( const char *pName, FnCommandCallbackVoid_t callback, const char *pHelpString /*= 0*/, int flags /*= 0*/, FnCommandCompletionCallback completionFunc /*= 0*/ ):
+	ConCommandBase()
 {
 	// Set the callback
 	m_fnCommandCallbackV1 = callback;
@@ -518,7 +519,8 @@ ConCommand::ConCommand( const char *pName, FnCommandCallbackVoid_t callback, con
 	BaseClass::CreateBase( pName, pHelpString, flags );
 }
 
-ConCommand::ConCommand( const char *pName, FnCommandCallback_t callback, const char *pHelpString /*= 0*/, int flags /*= 0*/, FnCommandCompletionCallback completionFunc /*= 0*/ )
+ConCommand::ConCommand( const char *pName, FnCommandCallback_t callback, const char *pHelpString /*= 0*/, int flags /*= 0*/, FnCommandCompletionCallback completionFunc /*= 0*/ ):
+	ConCommandBase()
 {
 	// Set the callback
 	m_fnCommandCallback = callback;
@@ -531,7 +533,8 @@ ConCommand::ConCommand( const char *pName, FnCommandCallback_t callback, const c
 	BaseClass::CreateBase( pName, pHelpString, flags );
 }
 
-ConCommand::ConCommand( const char *pName, ICommandCallback *pCallback, const char *pHelpString /*= 0*/, int flags /*= 0*/, ICommandCompletionCallback *pCompletionCallback /*= 0*/ )
+ConCommand::ConCommand( const char *pName, ICommandCallback *pCallback, const char *pHelpString /*= 0*/, int flags /*= 0*/, ICommandCompletionCallback *pCompletionCallback /*= 0*/ ):
+	ConCommandBase()
 {
 	// Set the callback
 	m_pCommandCallback = pCallback;
@@ -642,29 +645,40 @@ bool ConCommand::CanAutoComplete( void )
 //-----------------------------------------------------------------------------
 // Various constructors
 //-----------------------------------------------------------------------------
-ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags /* = 0 */ )
+ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags /* = 0 */ ):
+	ConCommandBase()
 {
 	Create( pName, pDefaultValue, flags );
 }
 
-ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString )
+ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString ):
+	ConCommandBase()
 {
 	Create( pName, pDefaultValue, flags, pHelpString );
 }
 
-ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax )
+ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax ):
+	ConCommandBase()
 {
 	Create( pName, pDefaultValue, flags, pHelpString, bMin, fMin, bMax, fMax );
 }
 
-ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, FnChangeCallback_t callback )
+ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax, bool bCompMin, float fCompMin, bool bCompMax, float fCompMax, FnChangeCallback_t callback ):
+	ConCommandBase()
 {
-	Create( pName, pDefaultValue, flags, pHelpString, false, 0.0, false, 0.0, callback );
+	Create( pName, pDefaultValue, flags, pHelpString, bMin, fMin, bMax, fMax, bCompMin, fCompMin, bCompMax, fCompMax, callback );
 }
 
-ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax, FnChangeCallback_t callback )
+ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, FnChangeCallback_t callback ):
+	ConCommandBase()
 {
-	Create( pName, pDefaultValue, flags, pHelpString, bMin, fMin, bMax, fMax, callback );
+	Create( pName, pDefaultValue, flags, pHelpString, false, 0.0, false, 0.0, false, 0.0, false, 0.0, callback );
+}
+
+ConVar::ConVar( const char *pName, const char *pDefaultValue, int flags, const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax, FnChangeCallback_t callback ):
+	ConCommandBase()
+{
+	Create( pName, pDefaultValue, flags, pHelpString, bMin, fMin, bMax, fMax, false, 0.0, false, 0.0, callback );
 }
 
 
@@ -843,6 +857,31 @@ void ConVar::ChangeStringValue( const char *tempVal, float flOldValue )
 //-----------------------------------------------------------------------------
 bool ConVar::ClampValue( float& value )
 {
+	if ( m_bCompEnabled )
+	{
+		if ( m_bHasCompMin && ( value < m_fCompMinVal ) )
+		{
+			value = m_fCompMinVal;
+			return true;
+		}
+
+		if ( m_bHasCompMax && ( value > m_fCompMaxVal ) )
+		{
+			value = m_fCompMaxVal;
+			return true;
+		}
+
+		if ( !m_bHasCompMin && !m_bHasCompMax )
+		{
+			const float defaultValue = V_atof( m_pszDefaultValue );
+			if ( abs( value - defaultValue ) > 0.0001f )
+			{
+				value = defaultValue;
+				return true;
+			}
+		}
+	}
+
 	if ( m_bHasMin && ( value < m_fMinVal ) )
 	{
 		value = m_fMinVal;
@@ -862,9 +901,9 @@ bool ConVar::ClampValue( float& value )
 // Purpose: 
 // Input  : *value - 
 //-----------------------------------------------------------------------------
-void ConVar::InternalSetFloatValue( float fNewValue )
+void ConVar::InternalSetFloatValue( float fNewValue, bool forceSet )
 {
-	if ( fNewValue == m_fValue )
+	if ( fNewValue == m_fValue && !forceSet )
 		return;
 
 	if ( IsFlagSet( FCVAR_MATERIAL_THREAD_MASK ) )
@@ -946,7 +985,8 @@ void ConVar::InternalSetIntValue( int nValue )
 //-----------------------------------------------------------------------------
 void ConVar::Create( const char *pName, const char *pDefaultValue, int flags /*= 0*/,
 	const char *pHelpString /*= NULL*/, bool bMin /*= false*/, float fMin /*= 0.0*/,
-	bool bMax /*= false*/, float fMax /*= false*/, FnChangeCallback_t callback /*= NULL*/ )
+	bool bMax /*= false*/, float fMax /*= false*/, bool bCompMin /*= false*/, float fCompMin /*= 0.0*/,
+	bool bCompMax /*= false*/, float fCompMax /*= false*/, FnChangeCallback_t callback /*= NULL*/ )
 {
 	m_pParent = this;
 
@@ -961,6 +1001,12 @@ void ConVar::Create( const char *pName, const char *pDefaultValue, int flags /*=
 	m_fMinVal = fMin;
 	m_bHasMax = bMax;
 	m_fMaxVal = fMax;
+	
+	m_bHasCompMin = bCompMin;
+	m_fCompMinVal = fCompMin;
+	m_bHasCompMax = bCompMax;
+	m_fCompMaxVal = fCompMax;
+	m_bCompEnabled = false;
 	
 	m_fnChangeCallback = callback;
 
@@ -998,7 +1044,7 @@ void ConVar::SetValue(const char *value)
 void ConVar::SetValue( float value )
 {
 	ConVar *var = ( ConVar * )m_pParent;
-	var->InternalSetFloatValue( value );
+	var->InternalSetFloatValue( value, false );
 }
 
 //-----------------------------------------------------------------------------
@@ -1044,6 +1090,27 @@ bool ConVar::GetMax( float& maxVal ) const
 
 //-----------------------------------------------------------------------------
 // Purpose: 
+// Input  : minVal - 
+// Output : true if there is a min set
+//-----------------------------------------------------------------------------
+bool ConVar::GetCompMin( float& minVal ) const
+{
+	minVal = m_pParent->m_fCompMinVal;
+	return m_pParent->m_bHasCompMin;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+// Input  : maxVal - 
+//-----------------------------------------------------------------------------
+bool ConVar::GetCompMax( float& maxVal ) const
+{
+	maxVal = m_pParent->m_fCompMinVal;
+	return m_pParent->m_bHasCompMax;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
 // Output : const char
 //-----------------------------------------------------------------------------
 const char *ConVar::GetDefault( void ) const
@@ -1055,6 +1122,32 @@ void ConVar::SetDefault( const char *pszDefault )
 { 
 	m_pszDefaultValue = pszDefault ? pszDefault : "";
 	Assert( m_pszDefaultValue );
+}
+
+void ConVar::SetCompetitiveMode( bool enabled )
+{
+	m_pParent->m_bCompEnabled = true;
+	if ( m_pParent->m_bHasCompMin && ( m_pParent->m_fValue < m_pParent->m_fCompMinVal ) )
+	{
+		m_pParent->InternalSetFloatValue( m_pParent->m_fCompMinVal, true );
+		return;
+	}
+
+	if ( m_pParent->m_bHasCompMax && ( m_pParent->m_fValue > m_pParent->m_fCompMaxVal ) )
+	{
+		m_pParent->InternalSetFloatValue( m_pParent->m_fCompMaxVal, true );
+		return;
+	}
+
+	if ( !m_pParent->m_bHasCompMin && !m_pParent->m_bHasCompMax )
+	{
+		const float defaultValue = V_atof( m_pParent->m_pszDefaultValue );
+		if ( abs( m_pParent->m_fValue - defaultValue ) > 0.0001f )
+		{
+			m_pParent->InternalSetFloatValue( defaultValue, true );
+			return;
+		}
+	}
 }
 
 //-----------------------------------------------------------------------------

@@ -330,6 +330,10 @@ public:
 									const char *pHelpString );
 								ConVar( const char *pName, const char *pDefaultValue, int flags, 
 									const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax );
+								ConVar( const char *pName, const char *pDefaultValue, int flags,
+									const char *pHelpString, bool bMin, float fMin, bool bMax, float fMax,
+									bool bCompMin, float fCompMin, bool bCompMax, float fCompMax,
+									FnChangeCallback_t callback );
 								ConVar( const char *pName, const char *pDefaultValue, int flags, 
 									const char *pHelpString, FnChangeCallback_t callback );
 								ConVar( const char *pName, const char *pDefaultValue, int flags, 
@@ -368,22 +372,26 @@ public:
 	// True if it has a min/max setting
 	bool						GetMin( float& minVal ) const;
 	bool						GetMax( float& maxVal ) const;
+	bool						GetCompMin( float& minVal ) const;
+	bool						GetCompMax( float& maxVal ) const;
 	const char					*GetDefault( void ) const;
 	void						SetDefault( const char *pszDefault );
+	void						SetCompetitiveMode( bool enabled );
 
 private:
 	// Called by CCvar when the value of a var is changing.
 	virtual void				InternalSetValue(const char *value);
 	// For CVARs marked FCVAR_NEVER_AS_STRING
-	virtual void				InternalSetFloatValue( float fNewValue );
+	virtual void				InternalSetFloatValue( float fNewValue, bool forceSet );
 	virtual void				InternalSetIntValue( int nValue );
 
 	virtual bool				ClampValue( float& value );
 	virtual void				ChangeStringValue( const char *tempVal, float flOldValue );
 
-	virtual void				Create( const char *pName, const char *pDefaultValue, int flags = 0,
+	void						Create( const char *pName, const char *pDefaultValue, int flags = 0,
 									const char *pHelpString = 0, bool bMin = false, float fMin = 0.0,
-									bool bMax = false, float fMax = false, FnChangeCallback_t callback = 0 );
+									bool bMax = false, float fMax = false, bool bCompMin = false, float fCompMin = 0.0,
+									bool bCompMax = false, float fCompMax = 0.0, FnChangeCallback_t callback = 0 );
 
 	// Used internally by OneTimeInit to initialize.
 	virtual void				Init();
@@ -412,6 +420,14 @@ private:
 	float						m_fMinVal;
 	bool						m_bHasMax;
 	float						m_fMaxVal;
+
+	// Comp Min/Max values
+	bool						m_bHasCompMin;
+	float						m_fCompMinVal;
+	bool						m_bHasCompMax;
+	float						m_fCompMaxVal;
+
+	bool						m_bCompEnabled;
 	
 	// Call this function when ConVar changes
 	FnChangeCallback_t			m_fnChangeCallback;
